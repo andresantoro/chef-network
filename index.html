@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="referrer" content="no-referrer" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; form-action 'none'; base-uri 'none'" />
+  <title>Chef Network Platform</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <script src="./vendor/cytoscape.min.js"></script>
+  <script src="./vendor/jlouvain.js"></script>
+</head>
+<body>
+  <div id="unlockOverlay" class="unlock-overlay">
+    <div class="unlock-card">
+      <h1 class="title-with-icon"><span class="icon-badge">&#x1F512;</span>Chef Network Platform</h1>
+      <p class="subtitle">The network data on this page is encrypted (AES-256-GCM) and only decrypted inside your browser. Enter the access key you were given.</p>
+      <form id="unlockForm" autocomplete="off">
+        <label for="keyInput">Access key or shared link</label>
+        <input id="keyInput" type="password" spellcheck="false" placeholder="Paste key..." />
+        <button type="submit">Unlock</button>
+      </form>
+      <p id="unlockStatus" class="unlock-status" role="status"></p>
+      <details class="advanced-edge-panel">
+        <summary>No key? Load your own JSON files</summary>
+        <div class="control-group">
+          <p class="muted">Files are read locally and never uploaded.</p>
+          <label for="nodesFileInput">Nodes JSON</label>
+          <input id="nodesFileInput" type="file" accept=".json" />
+          <label for="edgesFileInput">Edges JSON</label>
+          <input id="edgesFileInput" type="file" accept=".json" />
+          <label for="partitionFileInput">Representative partition JSON (optional)</label>
+          <input id="partitionFileInput" type="file" accept=".json" />
+          <button id="loadFilesBtn" type="button">Load selected files</button>
+        </div>
+      </details>
+    </div>
+  </div>
+  <div class="app">
+    <aside class="controls">
+      <div class="panel-header">
+        <h1 class="title-with-icon"><span class="icon-badge">&#x2699;</span>Chef Network Platform</h1>
+        <p class="subtitle">Interactive collaboration and influence network explorer.</p>
+        <button id="guideModeBtn" type="button">Start guided click tour</button>
+      </div>
+
+      <section class="control-group">
+        <label class="label-with-icon" for="searchInput"><span class="icon-badge small">&#x2315;</span>Find chef</label>
+        <input id="searchInput" type="text" placeholder="Type a chef name..." />
+      </section>
+
+      <section class="control-group">
+        <label class="label-with-icon" for="layoutSelect"><span class="icon-badge small">&#x25A6;</span>Layout</label>
+        <select id="layoutSelect">
+          <option value="cose" selected>Force-directed (CoSE)</option>
+          <option value="fr">Fruchterman-Reingold (approx.)</option>
+          <option value="fr_clustered">Force-directed + community clustering (selected algo)</option>
+          <option value="community_force_blocks">Community force blocks (selected algo)</option>
+          <option value="community_ring">Communities on ring (selected algo)</option>
+          <option value="community_grid">Communities on grid (selected algo)</option>
+          <option value="temporal_free">Temporal (x=birth year, free y)</option>
+          <option value="temporal_bands">Temporal (x=birth year, community bands)</option>
+          <option value="dag_layers_tb">DAG layers tree (top-down)</option>
+          <option value="dag_layers_lr">DAG layers tree (left-right)</option>
+          <option value="circle">Circle</option>
+          <option value="concentric">Concentric</option>
+          <option value="breadthfirst">Breadth-first</option>
+          <option value="grid">Grid</option>
+        </select>
+      </section>
+
+      <section class="control-group">
+        <label class="label-with-icon" for="edgeTypeSelect"><span class="icon-badge small">&#x21E2;</span>Edge type</label>
+        <select id="edgeTypeSelect">
+          <option value="all" selected>All links</option>
+          <option value="influence_by_working_together">Working together</option>
+          <option value="inspiration_no_working_together">Inspiration (no work)</option>
+          <option value="uncertain">Uncertain</option>
+        </select>
+      </section>
+
+      <section class="control-group">
+        <label class="label-with-icon" for="edgeColorModeSelect"><span class="icon-badge small">&#x25C8;</span>Edge colors</label>
+        <select id="edgeColorModeSelect">
+          <option value="influence_type" selected>By influence type</option>
+          <option value="source_community">By sender community (source node)</option>
+          <option value="target_community">By receiver community (target node)</option>
+        </select>
+      </section>
+
+      <section class="control-group action-row">
+        <button id="applyLayoutBtn">Apply layout</button>
+        <label class="label-with-icon" for="communityAlgoSelect"><span class="icon-badge small">&#x25CE;</span>Community detection algorithm</label>
+        <select id="communityAlgoSelect">
+          <option value="auto" selected>Auto (Louvain -> Label Propagation)</option>
+          <option value="louvain">Louvain</option>
+          <option value="label_propagation">Label Propagation</option>
+          <option value="sbm_approx">SBM-style (k-means approximation)</option>
+          <option value="weak_components">Weakly Connected Components</option>
+          <option value="dag_layers">DAG Layers (topological)</option>
+          <option value="dag_level_bins">DAG Level Bins</option>
+          <option value="dag_source_basin">DAG Source Basins</option>
+          <option value="representative_partition">Representative partition (loaded file)</option>
+        </select>
+        <label for="communityKInput">Community k (for SBM-style)</label>
+        <input id="communityKInput" type="number" min="2" max="20" value="6" />
+        <label>
+          <input id="gccOnlyCheck" type="checkbox" />
+          Run only on giant connected component (visible graph)
+        </label>
+        <button id="communitiesBtn">Run community detection</button>
+        <button id="nationalityBtn">Color by nationality</button>
+        <button id="resetStyleBtn">Reset colors</button>
+        <button id="fitBtn">Fit graph</button>
+      </section>
+
+      <section class="stats" id="statsBox"></section>
+
+      <section class="legend">
+        <h3 class="title-with-icon"><span class="icon-badge small">&#x2630;</span>Link Legend</h3>
+        <div class="legend-item">
+          <span class="swatch swatch-work"></span>
+          <span>Working together (solid)</span>
+        </div>
+        <div class="legend-item">
+          <span class="swatch swatch-inspiration"></span>
+          <span>Inspiration, no work (dashed)</span>
+        </div>
+        <div class="legend-item">
+          <span class="swatch swatch-uncertain"></span>
+          <span>Uncertain (dotted)</span>
+        </div>
+      </section>
+    </aside>
+
+    <main class="graph-and-details">
+      <div id="cy"></div>
+      <aside class="details">
+        <section class="analytics-panel">
+          <h2 class="section-title title-with-icon"><span class="icon-badge small">&#x25A3;</span>Live Analytics</h2>
+          <div class="control-group">
+            <label for="topKInput">Top-k (visible graph)</label>
+            <input id="topKInput" type="number" min="1" max="30" value="5" />
+            <label for="degreeModeSelect">Degree mode</label>
+            <select id="degreeModeSelect">
+              <option value="in" selected>In-degree</option>
+              <option value="out">Out-degree</option>
+              <option value="total">Total degree</option>
+            </select>
+            <div class="action-row">
+              <button id="computeNationalityBtn">Compute nationality distribution</button>
+              <button id="highlightTopKBtn">Highlight top-k nationalities</button>
+              <button id="clearTopKBtn">Clear top-k highlight</button>
+              <button id="computeTopDegreeBtn">Compute top-k connected chefs</button>
+              <button id="highlightTopDegreeBtn">Highlight top-k connected chefs</button>
+              <button id="clearTopDegreeBtn">Clear top-k degree highlight</button>
+            </div>
+          </div>
+
+          <details class="advanced-edge-panel">
+            <summary>Advanced edge style</summary>
+            <div class="control-group">
+              <label for="edgeOpacitySlider">Edge transparency: <span id="edgeOpacityValue">0.85</span></label>
+              <input id="edgeOpacitySlider" type="range" min="0.05" max="1" step="0.05" value="0.85" />
+              <label for="edgeWidthSlider">Edge width: <span id="edgeWidthValue">1.60</span></label>
+              <input id="edgeWidthSlider" type="range" min="0.5" max="6" step="0.1" value="1.6" />
+            </div>
+          </details>
+
+          <details class="advanced-edge-panel">
+            <summary>Advanced community settings</summary>
+            <div class="control-group">
+              <label for="louvainGammaInput">Louvain gamma (resolution)</label>
+              <input id="louvainGammaInput" type="number" min="0.1" max="5" step="0.1" value="1.0" />
+              <label>
+                <input id="louvainRandomizeCheck" type="checkbox" checked />
+                Louvain randomize
+              </label>
+              <label for="dagBinCountInput">DAG level bins (for DAG Level Bins)</label>
+              <input id="dagBinCountInput" type="number" min="2" max="20" step="1" value="6" />
+              <label for="gammaSweepMinInput">Gamma sweep min / max / step</label>
+              <div class="sweep-row">
+                <input id="gammaSweepMinInput" type="number" min="0.1" max="10" step="0.1" value="0.2" />
+                <input id="gammaSweepMaxInput" type="number" min="0.1" max="10" step="0.1" value="3.0" />
+                <input id="gammaSweepStepInput" type="number" min="0.05" max="2" step="0.05" value="0.2" />
+              </div>
+              <button id="gammaSweepBtn" type="button">Run gamma sweep (show Q)</button>
+              <button id="communityDefaultsBtn" type="button">Restore defaults (community settings)</button>
+            </div>
+          </details>
+        </section>
+
+        <h2 class="section-title title-with-icon"><span class="icon-badge small">&#x24D8;</span>Chef Details</h2>
+        <div id="chefDetails" class="detail-card">
+          <p>Select a node to see details.</p>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>

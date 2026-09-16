@@ -1,0 +1,5 @@
+# Never publish plaintext data or keys
+*.json
+KEY.txt
+*.key
+.DS_Store
