@@ -1182,7 +1182,7 @@ function runFruchtermanReingoldLayout({ clustered = false, iterations = 140 } = 
     if (clustered && communityMap) {
       const groups = {};
       nodesArray.forEach((node) => {
-        const c = String(communityMap[node.id()] ?? "0");
+        const c = String(communityMap[node.id()] ?? "unassigned");
         if (!groups[c]) {
           groups[c] = [];
         }
@@ -1287,7 +1287,7 @@ function runTemporalLayout(mode = "free") {
     }
     const groups = {};
     visibleNodes.forEach((node) => {
-      const c = String(communityMap[node.id()] ?? "0");
+      const c = String(communityMap[node.id()] ?? "unassigned");
       if (!groups[c]) {
         groups[c] = [];
       }
@@ -1437,7 +1437,7 @@ function runCommunityMacroLayout(variant = "ring") {
   const communityMap = ensureCommunitiesForLayouts().map;
   const groups = {};
   visibleNodes.forEach((node) => {
-    const cid = String(communityMap[node.id()] ?? "0");
+    const cid = String(communityMap[node.id()] ?? "unassigned");
     if (!groups[cid]) {
       groups[cid] = [];
     }
@@ -1502,7 +1502,7 @@ function runCommunityForceBlocksLayout() {
   // 1) Place communities globally using ring centers weighted by size.
   const groups = {};
   visibleNodes.forEach((node) => {
-    const cid = String(communityMap[node.id()] ?? "0");
+    const cid = String(communityMap[node.id()] ?? "unassigned");
     if (!groups[cid]) groups[cid] = [];
     groups[cid].push(node.id());
   });
@@ -1526,8 +1526,8 @@ function runCommunityForceBlocksLayout() {
   visibleEdges.forEach((e) => {
     const u = e.source().id();
     const v = e.target().id();
-    const cu = String(communityMap[u] ?? "0");
-    const cv = String(communityMap[v] ?? "0");
+    const cu = String(communityMap[u] ?? "unassigned");
+    const cv = String(communityMap[v] ?? "unassigned");
     if (cu === cv && edgesByCommunity[cu]) {
       edgesByCommunity[cu].push([u, v]);
     }
@@ -2306,13 +2306,13 @@ function bindEvents() {
   });
 }
 
-function initializeGraph(nodes, edges) {
+function initializeGraph(nodes, edges, initialLayout = makeLayout("cose")) {
   const elements = toElements(nodes, edges);
   cy = cytoscape({
     container: document.getElementById("cy"),
     elements,
     style: baseStyle(),
-    layout: makeLayout("cose"),
+    layout: initialLayout,
     wheelSensitivity: 0.2
   });
   if (typeof window !== "undefined") {
@@ -2347,13 +2347,23 @@ function readJsonFile(file) {
 
 function startApp(nodes, edges, partitionData) {
   document.getElementById("unlockOverlay").hidden = true;
-  initializeGraph(nodes, edges);
-  if (partitionData) {
-    indexRepresentativePartition(partitionData);
-    const count = Object.keys(representativePartitionNodeMap).length;
-    const numCommunities = partitionData.selection?.num_communities ?? "?";
-    ui.stats.innerHTML += `<div><strong>Representative partition:</strong> loaded (${count} chefs, ${numCommunities} communities). Select it in "Community detection algorithm".</div>`;
+  if (!partitionData) {
+    initializeGraph(nodes, edges);
+    return;
   }
+  // Default view: representative partition colors, communities on a ring, links by sender community.
+  ui.edgeColorModeSelect.value = "source_community";
+  edgeColorMode = "source_community";
+  initializeGraph(nodes, edges, { name: "preset" });
+  indexRepresentativePartition(partitionData);
+  const count = Object.keys(representativePartitionNodeMap).length;
+  const numCommunities = partitionData.selection?.num_communities ?? "?";
+  ui.stats.innerHTML += `<div><strong>Representative partition:</strong> loaded (${count} chefs, ${numCommunities} communities).</div>`;
+  ui.communityAlgoSelect.value = "representative_partition";
+  ui.layoutSelect.value = "community_ring";
+  runModularityColoring();
+  ui.applyLayoutBtn.click();
+  refreshEdgeStyle();
 }
 
 async function unlockWithKey(keyText) {
