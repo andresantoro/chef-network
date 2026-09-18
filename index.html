@@ -47,7 +47,8 @@
 
       <section class="control-group">
         <label class="label-with-icon" for="searchInput"><span class="icon-badge small">&#x2315;</span>Find chef</label>
-        <input id="searchInput" type="text" placeholder="Type a chef name..." />
+        <input id="searchInput" type="text" placeholder="Type a chef name..." autocomplete="off" />
+        <div id="searchResults" class="search-results" hidden></div>
       </section>
 
       <section class="control-group">
@@ -137,6 +138,10 @@
     <main class="graph-and-details">
       <div id="cy"></div>
       <aside class="details">
+        <h2 class="section-title title-with-icon"><span class="icon-badge small">&#x24D8;</span>Chef Details</h2>
+        <div id="chefDetails" class="detail-card">
+          <p>Select a node to see details.</p>
+        </div>
         <section class="analytics-panel">
           <h2 class="section-title title-with-icon"><span class="icon-badge small">&#x25A3;</span>Live Analytics</h2>
           <div class="control-group">
@@ -191,10 +196,6 @@
           </details>
         </section>
 
-        <h2 class="section-title title-with-icon"><span class="icon-badge small">&#x24D8;</span>Chef Details</h2>
-        <div id="chefDetails" class="detail-card">
-          <p>Select a node to see details.</p>
-        </div>
       </aside>
     </main>
   </div>

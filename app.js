@@ -17,6 +17,9 @@ const COMMUNITY_COLORS = [
 
 let cy;
 let selectedCommunityMap = null;
+let searchSuggestions = [];
+let searchActiveIndex = -1;
+const SEARCH_RESULT_LIMIT = 10;
 let selectedNationalityMap = null;
 let selectedCommunityMethod = null;
 let edgeOpacityValue = 0.85;
@@ -37,6 +40,7 @@ if (typeof window !== "undefined") {
 const ui = {
   guideModeBtn: document.getElementById("guideModeBtn"),
   searchInput: document.getElementById("searchInput"),
+  searchResults: document.getElementById("searchResults"),
   layoutSelect: document.getElementById("layoutSelect"),
   edgeTypeSelect: document.getElementById("edgeTypeSelect"),
   edgeColorModeSelect: document.getElementById("edgeColorModeSelect"),
@@ -82,7 +86,7 @@ let tourState = {
 
 const TOUR_STEPS = [
   { selector: "#nationalityBtn", title: "Color by nationality", text: "Click this to color chef nodes by nationality." },
-  { selector: "#searchInput", title: "Search a chef", text: "Type a chef name and click the node in the graph." },
+  { selector: "#searchInput", title: "Search a chef", text: "Type a chef name and pick it from the list to jump to that chef." },
   { selector: "#communityAlgoSelect", title: "Choose algorithm", text: "Set this to Label Propagation for the community demo." },
   { selector: "#communitiesBtn", title: "Run community detection", text: "This computes communities and colors nodes." },
   { selector: "#layoutSelect", title: "Select layout", text: "Choose 'Communities on ring' or 'Temporal (community bands)' here." },
@@ -200,7 +204,8 @@ function baseStyle() {
         label: "data(label)",
         "font-size": 9,
         color: "#e5e7eb",
-        "text-opacity": 0,
+        "text-opacity": 0.55,
+        "text-margin-y": -2,
         "text-outline-width": 2,
         "text-outline-color": "#0f172a",
         width: "mapData(totaldegree, 0, 35, 12, 45)",
@@ -1938,31 +1943,75 @@ function filterByEdgeType(edgeType) {
   updateStats();
 }
 
-function applySearch(query) {
-  const q = query.trim().toLowerCase();
+function focusNode(node) {
+  const neighborEdges = node.connectedEdges(":visible");
+  const neighborNodes = neighborEdges.connectedNodes(":visible").difference(node);
+
   clearFocusClasses();
+  cy.nodes(":visible").addClass("faded-node");
+  cy.edges(":visible").addClass("faded-edge");
+  node.removeClass("faded-node").addClass("highlighted selected-node");
+  neighborNodes.removeClass("faded-node").addClass("highlighted neighbor-node");
+  neighborEdges.removeClass("faded-edge").addClass("highlighted selected-edge");
+  cy.animate({ center: { eles: node }, zoom: 1.1, duration: 350, easing: "ease-out" });
+  renderChefDetails(node);
+}
 
+function closeSearchResults() {
+  searchSuggestions = [];
+  searchActiveIndex = -1;
+  ui.searchResults.innerHTML = "";
+  ui.searchResults.hidden = true;
+}
+
+function selectSearchResult(nodeId) {
+  const node = cy.getElementById(nodeId);
+  if (!node || !node.length) {
+    return;
+  }
+  ui.searchInput.value = "";
+  closeSearchResults();
+  focusNode(node);
+}
+
+function renderSearchResults(query) {
+  const q = query.trim().toLowerCase();
   if (!q) {
+    closeSearchResults();
     return;
   }
 
-  const matched = cy.nodes(":visible").filter((n) => n.data("name").toLowerCase().includes(q));
-  if (!matched.length) {
+  const matched = cy
+    .nodes(":visible")
+    .filter((n) => n.data("name").toLowerCase().includes(q))
+    .sort((a, b) => a.data("name").localeCompare(b.data("name")));
+
+  searchSuggestions = matched.slice(0, SEARCH_RESULT_LIMIT).map((n) => ({ id: n.id(), name: n.data("name") }));
+  searchActiveIndex = -1;
+
+  if (!searchSuggestions.length) {
+    ui.searchResults.innerHTML = `<div class="search-empty">No chef found</div>`;
+    ui.searchResults.hidden = false;
     return;
   }
 
-  // Highlight the matches (and label their neighbours) without hiding the rest.
-  const matchedEdges = matched.connectedEdges(":visible");
-  matchedEdges.connectedNodes(":visible").difference(matched).addClass("search-neighbor");
-  matchedEdges.addClass("selected-edge");
-  matched.addClass("search-match");
-
-  // Zoom to the matches themselves, not to their (often very long) links.
-  if (matched.length === 1) {
-    cy.animate({ center: { eles: matched }, zoom: 1.1, duration: 350, easing: "ease-out" });
-  } else {
-    cy.animate({ fit: { eles: matched, padding: 90 }, duration: 350, easing: "ease-out" });
+  ui.searchResults.innerHTML = searchSuggestions
+    .map((item, i) => `<button type="button" class="search-result" data-node-id="${item.id}" data-index="${i}">${item.name}</button>`)
+    .join("");
+  if (matched.length > searchSuggestions.length) {
+    ui.searchResults.innerHTML += `<div class="search-empty">+${matched.length - searchSuggestions.length} more, keep typing...</div>`;
   }
+  ui.searchResults.hidden = false;
+}
+
+function moveSearchSelection(step) {
+  if (!searchSuggestions.length) {
+    return;
+  }
+  searchActiveIndex = (searchActiveIndex + step + searchSuggestions.length) % searchSuggestions.length;
+  ui.searchResults.querySelectorAll(".search-result").forEach((el) => {
+    el.classList.toggle("active", Number(el.dataset.index) === searchActiveIndex);
+  });
 }
 
 function runModularityColoring() {
@@ -2212,12 +2261,41 @@ function bindEvents() {
     selectedCommunityMap = null;
     selectedCommunityMethod = null;
     filterByEdgeType(ui.edgeTypeSelect.value);
-    applySearch(ui.searchInput.value);
+    closeSearchResults();
     cy.fit(cy.elements(":visible"), 60);
   });
 
   ui.searchInput.addEventListener("input", (event) => {
-    applySearch(event.target.value);
+    renderSearchResults(event.target.value);
+  });
+
+  ui.searchInput.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      moveSearchSelection(event.key === "ArrowDown" ? 1 : -1);
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const pick = searchSuggestions[searchActiveIndex >= 0 ? searchActiveIndex : 0];
+      if (pick) selectSearchResult(pick.id);
+      return;
+    }
+    if (event.key === "Escape") {
+      ui.searchInput.value = "";
+      closeSearchResults();
+    }
+  });
+
+  ui.searchResults.addEventListener("click", (event) => {
+    const button = event.target.closest(".search-result");
+    if (button) selectSearchResult(button.dataset.nodeId);
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest("#searchResults") && event.target !== ui.searchInput) {
+      closeSearchResults();
+    }
   });
 
   ui.edgeColorModeSelect.addEventListener("change", () => {
@@ -2313,24 +2391,13 @@ function bindEvents() {
   });
 
   cy.on("tap", "node", (event) => {
-    const node = event.target;
-    const neighborEdges = node.connectedEdges(":visible");
-    const neighborNodes = neighborEdges.connectedNodes(":visible").difference(node);
-
-    clearFocusClasses();
-    cy.nodes(":visible").addClass("faded-node");
-    cy.edges(":visible").addClass("faded-edge");
-    node.removeClass("faded-node").addClass("highlighted selected-node");
-    neighborNodes.removeClass("faded-node").addClass("highlighted neighbor-node");
-    neighborEdges.removeClass("faded-edge").addClass("highlighted selected-edge");
-    cy.fit(node.union(neighborNodes).union(neighborEdges), 90);
-    renderChefDetails(node);
+    focusNode(event.target);
   });
 
   cy.on("tap", (event) => {
     if (event.target === cy) {
       clearSelection();
-      applySearch(ui.searchInput.value);
+      closeSearchResults();
     }
   });
 }

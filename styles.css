@@ -453,3 +453,47 @@ button:focus {
   min-height: 1.2em;
   color: var(--accent);
 }
+
+/* Chef search suggestions */
+.search-results {
+  margin-top: 0.35rem;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  box-shadow: var(--shadow);
+}
+
+.search-results[hidden] {
+  display: none;
+}
+
+.search-result {
+  display: block;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.search-result:last-child {
+  border-bottom: 0;
+}
+
+.search-result:hover,
+.search-result.active {
+  background: var(--panel-soft-2);
+  color: var(--accent);
+}
+
+.search-empty {
+  padding: 0.45rem 0.6rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
