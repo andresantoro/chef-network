@@ -200,7 +200,7 @@ function baseStyle() {
         label: "data(label)",
         "font-size": 9,
         color: "#e5e7eb",
-        "text-opacity": 0.28,
+        "text-opacity": 0,
         "text-outline-width": 2,
         "text-outline-color": "#0f172a",
         width: "mapData(totaldegree, 0, 35, 12, 45)",
@@ -264,6 +264,27 @@ function baseStyle() {
         "border-width": 2,
         "border-color": "#bae6fd",
         "z-index": 1000
+      }
+    },
+    {
+      selector: ".search-match",
+      style: {
+        "text-opacity": 1,
+        "font-size": 13,
+        color: "#fde68a",
+        "border-width": 4,
+        "border-color": "#facc15",
+        "z-index": 1002
+      }
+    },
+    {
+      selector: ".search-neighbor",
+      style: {
+        "text-opacity": 1,
+        "font-size": 10,
+        "border-width": 2,
+        "border-color": "#fde68a",
+        "z-index": 1001
       }
     },
     {
@@ -1882,7 +1903,9 @@ function renderChefDetails(node) {
 }
 
 function clearFocusClasses() {
-  cy.elements().removeClass("faded-node faded-edge highlighted selected-node neighbor-node selected-edge");
+  cy.elements().removeClass(
+    "faded-node faded-edge highlighted selected-node neighbor-node selected-edge search-match search-neighbor"
+  );
 }
 
 function clearSelection() {
@@ -1923,17 +1946,23 @@ function applySearch(query) {
     return;
   }
 
-  const matched = cy.nodes().filter((n) => n.data("name").toLowerCase().includes(q));
+  const matched = cy.nodes(":visible").filter((n) => n.data("name").toLowerCase().includes(q));
   if (!matched.length) {
     return;
   }
 
-  cy.nodes(":visible").addClass("faded-node");
-  cy.edges(":visible").addClass("faded-edge");
-  matched.removeClass("faded-node").addClass("highlighted");
-  matched.connectedEdges(":visible").removeClass("faded-edge").addClass("highlighted selected-edge");
-  matched.connectedNodes(":visible").removeClass("faded-node").addClass("neighbor-node");
-  cy.fit(matched.union(matched.connectedEdges()), 80);
+  // Highlight the matches (and label their neighbours) without hiding the rest.
+  const matchedEdges = matched.connectedEdges(":visible");
+  matchedEdges.connectedNodes(":visible").difference(matched).addClass("search-neighbor");
+  matchedEdges.addClass("selected-edge");
+  matched.addClass("search-match");
+
+  // Zoom to the matches themselves, not to their (often very long) links.
+  if (matched.length === 1) {
+    cy.animate({ center: { eles: matched }, zoom: 1.1, duration: 350, easing: "ease-out" });
+  } else {
+    cy.animate({ fit: { eles: matched, padding: 90 }, duration: 350, easing: "ease-out" });
+  }
 }
 
 function runModularityColoring() {
@@ -2285,8 +2314,8 @@ function bindEvents() {
 
   cy.on("tap", "node", (event) => {
     const node = event.target;
-    const neighborNodes = node.connectedNodes(":visible").difference(node);
     const neighborEdges = node.connectedEdges(":visible");
+    const neighborNodes = neighborEdges.connectedNodes(":visible").difference(node);
 
     clearFocusClasses();
     cy.nodes(":visible").addClass("faded-node");
